@@ -21,5 +21,5 @@ Przeznaczony do treningu nasłuchu CW (kodu Morse'a) – pozwala tworzyć niesko
 - Zapis do pliku WAV (mono, 16-bit).
 
 - -------------
-
+Kompilacja np. Windows PowerShell:
 pyinstaller --onefile --windowed --name cw_generator.exe cw_gui.py
