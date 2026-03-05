@@ -19,3 +19,7 @@ Przeznaczony do treningu nasłuchu CW (kodu Morse'a) – pozwala tworzyć niesko
 - Automatyczne wygładzanie (ramp) sygnału – eliminacja kliknięć.
 - Pasek postępu i informacje o stanie.
 - Zapis do pliku WAV (mono, 16-bit).
+
+- -------------
+
+pyinstaller --onefile --windowed --name cw_generator.exe cw_gui.py
