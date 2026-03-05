@@ -26,3 +26,8 @@ Aby zbudować wersję EXE:
 
 ```bash
 pyinstaller --onefile --windowed --name cw_generator.exe cw_gui.py
+
+```bash
+pyinstaller --onefile --windowed --name cw_generator cw_gui.py
+```
+
