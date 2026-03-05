@@ -22,13 +22,14 @@ Przeznaczony do treningu nasłuchu CW (kodu Morse'a) – pozwala tworzyć niesko
 
 ## Build
 
-Aby zbudować wersję EXE:
+Aby zbudować wersję:
 
+## Windows
 ```bash
 pyinstaller --onefile --windowed --name cw_generator.exe cw_gui.py
 ```
-Mac:
 
+## macOS
 ```bash
 pyinstaller --onefile --windowed --name cw_generator cw_gui.py
 ```
