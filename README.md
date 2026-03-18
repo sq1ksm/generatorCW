@@ -5,6 +5,7 @@ https://github.com/hamhobbypl/wavegenerator
 Na podstawie kodu:(c) 2026 Maniek SP8KM HAMHOBBY.PL — MIT License
 
 Przeznaczony do treningu nasłuchu CW (kodu Morse'a) – pozwala tworzyć nieskończenie wiele wariantów ćwiczeń na podstawie jednego pliku źródłowego JSON.
+18.03.2026 - LOSUJ SEKCJE I WPISY (niestety na razie wybór razem).
 
 ## Funkcje
 
