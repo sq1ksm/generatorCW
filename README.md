@@ -8,7 +8,7 @@ Przeznaczony do treningu nasłuchu CW (kodu Morse'a) – pozwala tworzyć niesko
 
 ## Zmiany
 
-18.03.2026 - LOSUJ SEKCJE I WPISY (niestety na razie wybór razem).
+18.03.2026 - LOSUJ SEKCJE I WPISY.
 
 ## Funkcje
 
