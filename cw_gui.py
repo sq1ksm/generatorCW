@@ -3,12 +3,11 @@
 # Copyright (c) 2026 Maniek SP8KM HAMHOBBY.PL
 # GUI - SQ1KSM
 # Generator CW z GUI (tylko WAV) – kompaktowy układ z amplitudą nad XYZ
-# Dodano obsługę separatorów [ ] z różną liczbą spacji oraz opcję losowania.
+# Dodano opcję włączania/wyłączania losowania (zgodnie z --random)
 
 import json
 import math
 import random
-import re
 import time
 import wave
 import threading
@@ -31,9 +30,6 @@ MORSE = {
     ".": ".-.-.-", ",": "--..--", "?": "..--..", "/": "-..-.", "-": "-....-",
     "(": "-.--.",  ")": "-.--.-",
 }
-
-# ---------- wyrażenie regularne do separatorów ----------
-SEPARATOR_RE = re.compile(r"\[(\s*)\]")
 
 # ---------- funkcje pomocniczne ----------
 def farnsworth_scale(wpm: float, fwpm: float) -> float:
@@ -109,70 +105,19 @@ def cw_emit_token(token: str, sr: int, freq: float, wpm: float, fwpm: float, amp
 def parse_section_header(header: str) -> list[str]:
     return [t for t in header.strip().split() if t]
 
-def parse_wordline(raw: str, Y: float) -> tuple[list[str], list[float]]:
-    """
-    Rozbija linię na słowa oraz przerwy między nimi (w sekundach).
-    Separator [  ] oznacza przerwę = liczba spacji * Y.
-    Zwraca (lista słów, lista przerw) – przerw jest o 1 mniej niż słów.
-    """
-    parts: list[tuple[str, float | None]] = []
-    pos = 0
-    for m in SEPARATOR_RE.finditer(raw):
-        left = raw[pos:m.start()]
-        if left.strip():
-            parts.append((left.strip(), None))
-        spaces_inside = len(m.group(1))
-        gap_seconds = spaces_inside * Y
-        parts.append(("", gap_seconds))
-        pos = m.end()
-    tail = raw[pos:]
-    if tail.strip():
-        parts.append((tail.strip(), None))
-
-    words: list[str] = []
-    gaps: list[float] = []
-    pending_explicit_gap = False
-
-    for text, gap_sec in parts:
-        if gap_sec is None:
-            subwords = [t for t in text.split() if t]
-            if not subwords:
-                continue
-            for i, subword in enumerate(subwords):
-                if not words:
-                    words.append(subword)
-                else:
-                    if pending_explicit_gap and i == 0:
-                        words.append(subword)
-                    else:
-                        gaps.append(Y)   # domyślna przerwa (jedna spacja)
-                        words.append(subword)
-            pending_explicit_gap = False
-        else:
-            if not words:
-                continue
-            gaps.append(gap_sec)
-            pending_explicit_gap = True
-
-    # normalizacja: liczba gaps ma być o 1 mniejsza niż liczba words
-    if len(gaps) > max(0, len(words) - 1):
-        gaps = gaps[:len(words) - 1]
-    return words, gaps
+def split_wordline(raw: str) -> list[str]:
+    s = raw.replace("[  ]", " ")
+    return [t for t in s.strip().split() if t]
 
 def estimate_total_steps(data) -> int:
-    """
-    Liczymy kroki: sekcja + tokeny nagłówka + linie + słowa w liniach.
-    """
     steps = 0
     for hdr, entries in data:
-        steps += 1  # sekcja
+        steps += 1
         hdr_tokens = parse_section_header(hdr)
         steps += len(hdr_tokens)
         steps += len(entries)
         for raw in entries:
-            # Używamy Y=1 (wartość dowolna, potrzebne tylko słowa)
-            words, _ = parse_wordline(raw, Y=1.0)
-            steps += len(words)
+            steps += len(split_wordline(raw))
     return max(1, steps)
 
 def render_one_pass(
@@ -186,19 +131,16 @@ def render_one_pass(
     Z: float,
     amp: float = 0.35,
     end_silence: float = 0.8,
-    randomize: bool = True,
+    randomize: bool = True,               # NOWY PARAMETR
     progress_callback=None,
 ) -> array:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     sections = [(hdr, entries) for hdr, entries in data]
-    if randomize:
+    if randomize:                          # Warunkowe losowanie
         random.shuffle(sections)
     out = array('h')
-    # Z jest przerwą po ostatnim słowie w linii, ale w tym kodzie po linii dodajemy Z (tak było oryginalnie).
-    # Dla zgodności z wcześniejszą wersją: po każdej linii (po ostatnim słowie) dodajemy Z.
-    # W oryginalnym generuj.py po ostatnim słowie w linii było Z, a nie Y.
-    # Tutaj wcześniejszy kod dodawał Y po każdym słowie i potem Z po linii.
-    # Zachowam tę logikę, ale Z po linii jest już dodawane na końcu pętli po słowach.
+    z_after_line = max(0.0, Z - Y)
+
     for hdr, entries in sections:
         if progress_callback:
             progress_callback(1)
@@ -209,25 +151,18 @@ def render_one_pass(
             if progress_callback:
                 progress_callback(1)
         entries = list(entries)
-        if randomize:
+        if randomize:                       # Warunkowe losowanie wpisów
             random.shuffle(entries)
         for raw in entries:
             if progress_callback:
                 progress_callback(1)
-            words, gaps = parse_wordline(raw, Y)
-            for i, w in enumerate(words):
+            words = split_wordline(raw)
+            for w in words:
                 add_samples(out, cw_emit_token(w, sr, freq, wpm, fwpm, amp=amp))
-                if i == len(words) - 1:
-                    # po ostatnim słowie w linii nie dodajemy przerwy Y, tylko potem dodamy Z
-                    pass
-                else:
-                    # przerwa między słowami: gaps[i] jeśli istnieje, w przeciwnym razie Y
-                    gap = gaps[i] if i < len(gaps) else Y
-                    add_samples(out, gen_silence(sr, gap))
+                add_samples(out, gen_silence(sr, Y))
                 if progress_callback:
                     progress_callback(1)
-            # po zakończeniu linii dodajemy przerwę Z
-            add_samples(out, gen_silence(sr, Z))
+            add_samples(out, gen_silence(sr, z_after_line))
     add_samples(out, gen_silence(sr, end_silence))
     return out
 
@@ -257,7 +192,7 @@ class CwGeneratorApp:
         self.z = tk.DoubleVar(value=3.0)
         self.amp = tk.DoubleVar(value=0.35)
         self.end_silence = tk.DoubleVar(value=0.8)
-        self.randomize = tk.BooleanVar(value=True)
+        self.random_enabled = tk.BooleanVar(value=True)   # NOWA ZMIENNA
 
         # Kolejka do komunikacji z wątkiem
         self.queue = queue.Queue()
@@ -278,7 +213,7 @@ class CwGeneratorApp:
         ttk.Entry(frame_files, textvariable=self.out_path, width=40).grid(row=1, column=1, padx=5)
         ttk.Button(frame_files, text="Zapisz jako", command=self.browse_out).grid(row=1, column=2)
 
-        # Ramka parametrów – 5 wierszy (dodany wiersz z losowaniem)
+        # Ramka parametrów
         frame_params = ttk.LabelFrame(self.root, text="Parametry", padding=5)
         frame_params.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
 
@@ -308,8 +243,12 @@ class CwGeneratorApp:
         ttk.Label(frame_params, text="Z (s):").grid(row=3, column=4, sticky="w", padx=2, pady=2)
         ttk.Entry(frame_params, textvariable=self.z, width=8).grid(row=3, column=5, padx=2, pady=2)
 
-        # Wiersz 4: Losowanie
-        ttk.Checkbutton(frame_params, text="Losuj sekcje i wpisy", variable=self.randomize).grid(row=4, column=0, columnspan=6, sticky="w", padx=2, pady=5)
+        # NOWY wiersz 4: Checkbox losowania
+        ttk.Checkbutton(
+            frame_params,
+            text="Losuj sekcje i wpisy",
+            variable=self.random_enabled
+        ).grid(row=4, column=0, columnspan=6, sticky="w", padx=2, pady=5)
 
         # Ramka postępu
         frame_progress = ttk.Frame(self.root, padding=5)
@@ -376,7 +315,7 @@ class CwGeneratorApp:
                 Z=self.z.get(),
                 amp=self.amp.get(),
                 end_silence=self.end_silence.get(),
-                randomize=self.randomize.get(),
+                randomize=self.random_enabled.get(),   # PRZEKAZANIE WARTOŚCI
                 progress_callback=progress_callback,
             )
 
